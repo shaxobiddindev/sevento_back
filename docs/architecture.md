@@ -1,7 +1,11 @@
 # Arxitektura (backend)
 
-> Holat: **0-bosqich — reja**. Bu hujjat kodlashdan oldin tasdiqlash uchun yozilgan.
-> Tasdiqlangandan keyin har bosqichda haqiqiy holatga moslab yangilanadi.
+> Holat: 1-bosqich amalga oshirildi (`config/`, `core/`, `apps/accounts`, `apps/branches`, `apps/audit`).
+> Rejadan farqlar: (1) `OutboxEvent` so'rov kontekstini (`request_id`, `ip`, `user_agent`) ham saqlaydi —
+> audit Celery orqali qayta tarqatilganda ham to'g'ri yoziladi; (2) `HasCapability` ViewSet da
+> `capability_map` bilan ishlaydi, ro'yxatda bo'lmagan action rad etiladi (`"*"` — hammasi uchun);
+> (3) sozlama ta'riflari har app ning `settings_defs.py` faylida ro'yxatga olinadi (`core.settings_registry`);
+> (4) DRF ning o'z xabarlari `LANGUAGE_CODE="uz"` bilan allaqachon o'zbekcha.
 
 ## 1. Umumiy ko'rinish
 
@@ -98,13 +102,12 @@ sevento_back/
 │   ├── inventory/           # qoldiq, partiya, harakatlar jurnali, ko'chirish,
 │   │                        # inventarizatsiya, hisobdan chiqarish, costing/ (FIFO)
 │   ├── purchasing/          # yetkazib beruvchi, kirim, qo'shimcha xarajat, allocation/
-│   ├── sales/               # savdo, chek, qaytarish
+│   ├── sales/               # savdo, pricing.py, receipt.py + templates/sales/receipt.html, qaytarish
 │   ├── payments/            # to'lov turi, kassa, to'lov, mijoz, nasiya, providers/
 │   ├── reports/             # hisobotlar reyestri, renderers/ (PDF, Excel), dashboard
 │   ├── audit/               # audit jurnali (hodisalarga obuna)
 │   └── realtime/            # Channels consumer, ticket, guruhlar, hodisa → WS
-├── templates/               # PDF shablonlari (chek, hisobotlar)
-├── static/fonts/            # Noto Sans (oʻ, gʻ va ʻ belgilari uchun)
+├── templates/               # umumiy shablonlar (app shablonlari — har app ning templates/ papkasida)
 ├── docs/
 ├── docker/                  # entrypoint skriptlar
 ├── Dockerfile
@@ -207,12 +210,13 @@ Strelka = "shu modulning service/selector funksiyasini chaqiradi". Teskari yo'na
 | `branches` | Branch | `selectors.get_branch()`, `selectors.active_branches()` |
 | `catalog` | Category, Unit, Product, PriceType, ProductPrice | `selectors.get_product()`, `selectors.get_price()` |
 | `currency` | Currency, ExchangeRate | `selectors.get_rate()`, `services.convert()`, `selectors.base_currency()` |
-| `inventory` | StockLevel, Batch, StockMovement, Transfer(+Item), StockCount(+Item), WriteOff(+Item), WriteOffReason | `services.receive_stock()`, `services.issue_stock()`, `services.return_stock()`, `selectors.get_stock()` |
+| `inventory` | StockLevel, Batch, StockMovement, Transfer(+Item), StockCount(+Item), WriteOff(+Item), WriteOffReason | `services` paketi: `stock.py` (`receive_stock()`, `issue_stock()`, `restore_stock()`, `reverse_receipt()`, `adjust_to_counted()` — qoldiqni o'zgartiradigan yagona joy), `transfers.py`, `counts.py`, `writeoffs.py`; `selectors.get_quantity()`, `selectors.is_source_untouched()`; `types.DocRef`, `types.MovementType`, `types.allocations_to_json/from_json` (boshqa app lar `models` ni emas, shularni import qiladi) |
 | `purchasing` | Supplier, Purchase, PurchaseItem, PurchaseExpense, ExpenseType | `selectors.*` (hisobotlar uchun) |
-| `payments` | PaymentMethod, Cashbox, CashTransaction, CashFlowCategory, Customer, Payment, Debt, DebtAllocation, CustomerLedgerEntry | `services.receive_payment()`, `services.register_debt()`, `services.refund()`, `selectors.available_credit()` |
-| `sales` | Sale, SaleItem, SaleReturn, SaleReturnItem | `selectors.*` (hisobotlar uchun) |
-| `reports` | ReportJob | — |
+| `payments` | PaymentMethod, Cashbox, CashTransaction, CashFlowCategory, CashShift(+Balance), Customer, Payment, Debt, DebtAllocation, CustomerLedgerEntry | `services` paketi (`payments.py`, `credit.py`, `cash.py`): `receive_payment()`, `give_change()`, `refund_to_customer()`, `reverse_document_payments()`, `register_debt()`, `cancel_document_debts()`, `reduce_document_debt()`, `receive_debt_payment()`, `credit_status()`; `selectors.payments_for_document()`, `document_debt()`; `types.PaymentDoc` |
+| `sales` | Sale, SaleItem, SaleReturn, SaleReturnItem | `selectors.*` (hisobotlar uchun); qaytarish `services.create_return()` — `inventory.restore_stock()` + `payments.reduce_document_debt()` / `refund_to_customer()` |
+| `reports` | ReportJob | — (boshqa app lar `reports` ga bog'lanmaydi — import-linter kontrakti). O'zi `sales`/`payments`/`inventory`/`purchasing`/`catalog`/`currency` selectorlarini o'qiydi; `dashboard.build_dashboard()` ham shu orqali |
 | `audit` | AuditLog | — |
+| `demo` | — (modelsiz) | `manage.py seed_demo` — demo ma'lumotlar faqat boshqa app servislari/selectorlari orqali (import-linter kontrakti) |
 | `realtime` | — (ticket Redis da) | `services.issue_ticket()` |
 | `core` | OutboxEvent, SystemSetting, DocumentSequence, IdempotencyRecord | `events.publish()`, `numbering.next_number()`, `settings_service.get()` |
 
@@ -231,10 +235,10 @@ Qat'iy qoidalar:
 |---|---|---|---|---|
 | Tannarx usuli | `inventory.costing.CostingStrategy` | `FifoStrategy` | `AverageCostStrategy` | `SystemSetting["inventory.costing_method"]` |
 | Kirim xarajatlarini taqsimlash | `purchasing.allocation.AllocationStrategy` | qiymat bo'yicha, miqdor bo'yicha | og'irlik bo'yicha | har bir xarajat qatorida `allocation_method` |
-| To'lov provayderi | `payments.providers.PaymentProvider` | `ManualProvider` (naqd, terminal, o'tkazma) | `ClickProvider`, `PaymeProvider` | `PaymentMethod.provider` (MB) |
+| To'lov provayderi | `payments.providers.PaymentProvider` | `ManualProvider` (naqd, terminal, o'tkazma) ✅ | `ClickProvider`, `PaymeProvider` | `PaymentMethod.provider` (MB) |
 | Valyuta kursi manbai | `currency.providers.RateProvider` | `CbuRateProvider` | boshqa bank / qo'lda | `SystemSetting["currency.rate_provider"]` |
-| Hisobotlar | `reports.registry.BaseReport` + `@register_report` | savdo, foyda, qoldiq, qarzlar, kassa ... | yangi fayl `reports/definitions/<nom>.py` | autodiscover — mavjud kod o'zgarmaydi |
-| Hisobot formati | `reports.renderers.Renderer` | JSON, PDF, XLSX | CSV | `?format=pdf` |
+| Hisobotlar | `reports.registry.BaseReport` + `@register_report` | 13 ta ✅: savdo, tovarlar bo'yicha foyda, qaytarish, qoldiq, aylanma, harakatlar, ko'chirish, hisobdan chiqarish, kirim, to'lovlar, kassa oqimi, qarzlar, qarzlar yoshi | yangi fayl `reports/definitions/<nom>.py` (ta'rif: `columns()`, `rows()`, `filters`, `capability`, `heavy`) | `ReportsConfig.ready()` `definitions/` ni autodiscover qiladi — mavjud kod (view, renderlar, frontend) o'zgarmaydi |
+| Hisobot formati | `reports.renderers.Renderer` (`@register_renderer`) | JSON (ko'rish), PDF (WeasyPrint), XLSX (openpyxl) ✅ | CSV | `POST /reports/{key}/export/ {format}` |
 
 Har bir joyda oddiy reyestr: `registry.register("fifo", FifoStrategy)` va `registry.get(key)`.
 
@@ -253,7 +257,7 @@ class CostingStrategy(Protocol):
         Partiyalarni select_for_update bilan qulflaydi. Yetmasa InsufficientStock."""
 ```
 
-`inventory.services.issue_stock()` strategiyani chaqiradi, harakatlar jurnaliga yozadi va `StockLevel` ni yangilaydi — savdo, ko'chirish, hisobdan chiqarish hammasi shu bitta funksiyadan o'tadi.
+`inventory.services.issue_stock()` strategiyani chaqiradi, harakatlar jurnaliga yozadi va `StockLevel` ni yangilaydi — savdo, ko'chirish, hisobdan chiqarish, inventarizatsiya kamomadi hammasi shu bitta funksiyadan o'tadi. Teskari amallar (savdo/ko'chirish/hisobdan chiqarishni bekor qilish, savdo qaytarish) — `restore_stock()`: tovar hujjatda saqlangan `batch_allocations` bo'yicha **asl partiyalarga** qaytadi, tannarx saqlanadi.
 O'rtacha tannarxga o'tish uchun yangi strategiya klassi va bir martalik "partiyalarni o'rtachaga o'tkazish" service i yoziladi; savdo/ko'chirish kodi o'zgarmaydi.
 
 ## 7. API qoidalari
@@ -328,9 +332,16 @@ sequenceDiagram
 - Cookie endpointlari (`refresh`, `logout`) uchun CSRF himoyasi: `SameSite=Strict` + `Origin` sarlavhasini `CSRF_TRUSTED_ORIGINS` bilan tekshirish.
 - Login uchun throttle, muvaffaqiyatsiz urinishlar audit ga yoziladi.
 - Har endpointda: `IsAuthenticated` + `HasCapability("sales.create")` + nuqta tekshiruvi (batafsil: [permissions.md](permissions.md)).
-- **Tauri haqida:** Tauri oynasining origin i (`tauri://localhost`) API domenidan farq qiladi, shuning uchun brauzer cookie si u yerda ishlamaydi.
-  Yechim: Tauri buildida HTTP so'rovlar `@tauri-apps/plugin-http` orqali yuboriladi (o'z cookie jari bor, refresh cookie odatdagidek ishlaydi).
-  Frontend API klienti `fetch` funksiyasini almashtirish imkoniyati bilan yoziladi, shuning uchun bu bitta adapter. WebSocket ticket bilan ishlagani uchun cookie ga bog'liq emas.
+- **Tauri (desktop) haqida** ✅ (9-bosqich): oyna origin i (`tauri://localhost`, Windows da `http://tauri.localhost`) API domenidan farq qiladi — WebView cookie si ishlamaydi.
+  - `login` / `refresh` / `logout` — Rust buyrug'i `auth_request` (`sevento_front/src-tauri/src/auth.rs`): o'z cookie jari, javobdagi `Set-Cookie` JS ga **berilmaydi** (httpOnly kafolati saqlanadi; `plugin-http` esa barcha sarlavhalarni JS ga qaytaradi — shuning uchun auth uchun ishlatilmaydi). Jar `session.json` da (0600), "Chiqish" uni tozalaydi. So'rov `Origin` siz — `check_origin` o'tkazadi (cookie avtomatik ketmaydigan mijoz).
+  - Qolgan REST — `@tauri-apps/plugin-http` (CORS yo'q; ruxsat faqat build da berilgan server manziliga: `VITE_API_URL` → capability scope). Backend o'zgarmaydi.
+  - WebSocket — WebView ning oddiy WebSocket i, ticket bilan (cookie ga bog'liq emas). `REALTIME_ALLOWED_ORIGINS` default ro'yxatida Tauri originlari bor (`apps/realtime/tests/test_origins.py`).
+
+### PDF (chek, hisobotlar)
+
+- WeasyPrint: Django shablon → PDF. Shrift — DejaVu Sans (Docker image da `fonts-dejavu-core`, CI da ham o'rnatiladi): oʻ, gʻ, ʻ, ’ belgilari to'g'ri chiqadi va PDF ichiga joylanadi.
+- Chek 80 mm termoprinter uchun: avval uzun sahifada o'lchanadi, keyin aniq balandlik bilan qayta chiziladi (bo'sh qog'oz chiqmaydi). Sonlar `core.formatting.format_number` bilan (`142 500`, `1,500`).
+- Frontend PDF ni `Authorization` bilan Blob sifatida oladi va yashirin iframe orqali chop etadi — token URL ga yozilmaydi.
 
 ## 9. Sozlamalar
 
@@ -341,11 +352,14 @@ sequenceDiagram
 |---|---|---|
 | `inventory.costing_method` | `"fifo"` | tannarx strategiyasi |
 | `inventory.default_min_quantity` | `"5"` | tovar/nuqta uchun alohida berilmagan bo'lsa minimal qoldiq |
-| `inventory.allow_negative_stock` | `false` | manfiy qoldiqqa ruxsat |
-| `sales.max_seller_discount_percent` | `"10"` | sotuvchi bera oladigan maksimal chegirma |
-| `payments.default_credit_limit` | `{"amount": "0", "currency": "USD"}` | yangi mijoz kredit limiti |
+| `sales.max_seller_discount_percent` | `"10"` | sotuvchi bera oladigan maksimal chegirma (har qatorda) |
+| `sales.default_currency` | `"UZS"` | kassada boshlang'ich savdo valyutasi |
+| `sales.convert_missing_price` | `true` | savdo valyutasida narx bo'lmasa, boshqa valyutadagi narx joriy kurs bilan |
+| `sales.receipt_header` / `sales.receipt_footer` | `""` / `"Xaridingiz uchun rahmat!"` | chek sarlavhasi (bo'sh — nuqta nomi) va oxiri |
+| `payments.default_credit_limit_base` | `"0"` | mijozda alohida berilmagan bo'lsa kredit limiti (asosiy valyutada; 0 — nasiya yo'q) |
 | `payments.credit_limit_warning_percent` | `"80"` | limitga yaqinlashganda ogohlantirish chegarasi |
 | `payments.default_due_days` | `30` | nasiya muddati (kun) |
+| `cashbox.require_open_shift` | `false` | naqd harakat faqat ochiq smenada |
 | `currency.rate_provider` | `"cbu"` | kurs manbai |
 | `currency.base_code` | `"USD"` | tannarx va foyda hisoblanadigan asosiy valyuta |
 
@@ -356,8 +370,9 @@ sequenceDiagram
 | Vazifa | Jadval (default) | Nima qiladi |
 |---|---|---|
 | `currency.tasks.fetch_rates` | har kuni 09:05 (MB da o'zgaradi) | provider dan kurslarni oladi, `ExchangeRate` ga yozadi, `currency.rate_updated` hodisasi |
-| `payments.tasks.detect_overdue_debts` | har kuni 08:05 | muddati o'tgan qarzlarni `overdue` qiladi, `debt.overdue` hodisasi |
-| `reports.tasks.generate_report` | so'rov bo'yicha | og'ir PDF/Excel hisobotlar, natija `ReportJob.file` ga |
+| `payments.detect_overdue_debts` | har kuni 08:05 (MB da o'zgaradi) | muddati o'tgan ochiq qarzlar uchun bir martalik `debt.overdue` hodisasi (`overdue_notified_at`) ✅ |
+| `reports.generate_report` | so'rov bo'yicha | og'ir/uzoq davrli PDF/Excel, natija `ReportJob.file` ga, keyin `report.ready` / `report.failed` ✅ |
+| `reports.cleanup_report_files` | har kuni 03:20 (MB da) | `reports.keep_days` (7) dan eski fayl va `ReportJob` larni o'chiradi ✅ |
 | `core.tasks.redispatch_outbox` | har daqiqa | jo'natilmay qolgan hodisalarni qayta jo'natadi |
 | `core.tasks.cleanup` | har kuni tunda | eski idempotency yozuvlari va jo'natilgan outbox ni tozalaydi |
 

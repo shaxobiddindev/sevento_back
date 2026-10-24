@@ -1,6 +1,6 @@
 # Rollar, huquqlar va nuqta chegarasi
 
-> Holat: 0-bosqich — reja.
+> Holat: 0-bosqichda reja; 1–7-bosqichlarda amalga oshirilgan qismlari ✅ bilan belgilangan.
 
 ## 1. Model
 
@@ -26,6 +26,7 @@
 | `currency.rates.manage` | kursni qo'lda kiritish |
 | `inventory.view` | qoldiq va harakatlar jurnali |
 | `inventory.view_cost` | tannarx va partiya narxini ko'rish |
+| `inventory.manage` | nuqta bo'yicha minimal qoldiqni o'zgartirish |
 | `purchasing.view` / `purchasing.manage` | kirimlar |
 | `inventory.transfers.create` / `inventory.transfers.receive` / `inventory.transfers.cancel` | ko'chirish |
 | `inventory.counts.manage` | inventarizatsiya |
@@ -38,7 +39,7 @@
 | `sales.credit` | nasiyaga sotish |
 | `payments.view` / `payments.receive` | to'lov qabul qilish |
 | `payments.refund` | pul qaytarish |
-| `cashbox.view` / `cashbox.manage` | kassa, smena, qo'lda kirim-chiqim |
+| `cashbox.view` / `cashbox.manage` | kassa qoldig'i va jurnali; smena ochish/yopish, qo'lda kirim-chiqim (`manage`) |
 | `customers.view` / `customers.manage` | mijozlar |
 | `customers.credit_limit.manage` | kredit limitini o'zgartirish |
 | `debts.view` / `debts.manage` | qarzlar, muddatni o'zgartirish |
@@ -89,7 +90,7 @@ Har endpointda uch qavat:
    - Yozish: service funksiyasi `ensure_branch_access(actor, branch)` ni chaqiradi — begona nuqtaga yozish 403 `branch_forbidden`.
      Service darajasida tekshirilgani uchun view unutilsa ham himoya ishlaydi.
    - Ob'ekt darajasi: `GET /sales/{id}/` begona nuqtaniki bo'lsa — 404 (mavjudligini ham oshkor qilmaymiz).
-4. Qo'shimcha ichki qoidalar service da: sotuvchi faqat **o'z** savdosini qaytara oladi (`sales.returns.create` + `sale.seller == actor`, yoki `sales.cancel`), kassa smenasi ochiq bo'lmasa naqd qabul qilinmaydi va h.k.
+4. Qo'shimcha ichki qoidalar service da: sotuvchi faqat **o'z** savdosini qaytara oladi (`sales.returns.create` + `sale.seller == actor`, yoki `sales.cancel`) ✅, kassa smenasi ochiq bo'lmasa naqd qabul qilinmaydi (`cashbox.require_open_shift`) va h.k.
 
 Testlar: har app `tests/test_permissions.py` — 4 rol × asosiy endpointlar matritsasi, begona nuqta bilan 403/404.
 
@@ -99,3 +100,27 @@ Testlar: har app `tests/test_permissions.py` — 4 rol × asosiy endpointlar mat
 - `<RequireCapability cap="reports.financial">` — route guard; huquq bo'lmasa `/403` sahifasi.
 - Nuqta tanlagich: `all_branches=true` bo'lsa hamma nuqtalar + "Hammasi"; aks holda faqat biriktirilgan nuqtalar, bitta bo'lsa tanlagich ko'rinmaydi.
 - Frontend yashirishi faqat qulaylik — backend har doim tekshiradi.
+
+## Nasiya va kassa bo'yicha qo'shimcha qoidalar (6-bosqich)
+
+- Mijozni sotuvchi ham yaratadi/tahrirlaydi (`customers.manage`), lekin kredit limiti va nasiya muddatini faqat `customers.credit_limit.manage` o'zgartiradi (maydon darajasida, service da tekshiriladi → 403 `credit_limit_forbidden`).
+- Mijozlar barcha nuqtalar uchun umumiy (kredit qarori umumiy qarzga qarab); qarzlar ro'yxati va to'lovlar jurnali — nuqta chegarasi bilan.
+- Qarz to'lovini qabul qilish — `payments.receive` (o'z nuqtasi kassasiga); qaytarish — `payments.refund` (faqat qarz to'lovi; savdo to'lovi — savdoni bekor qilib, `sales.cancel`).
+- Nasiyaga sotish — `sales.credit` (403 `credit_forbidden`).
+
+## Ombor hujjatlari va qaytarish bo'yicha qoidalar (7-bosqich)
+
+- **Ko'chirish:** ko'rish — `inventory.transfers.create` / `.receive` yoki `inventory.view_cost` (birortasi); jo'natuvchi nuqta hamma hujjatlarini ko'radi, qabul qiluvchi nuqta — qoralamadan tashqari. Yaratish, tahrirlash, jo'natish — `inventory.transfers.create` + **jo'natuvchi** nuqtaga ruxsat; qabul — `inventory.transfers.receive` + **qabul qiluvchi** nuqtaga ruxsat; bekor qilish — `inventory.transfers.cancel` + jo'natuvchi nuqta. Qabul qiluvchi nuqta tanlovi uchun barcha faol nuqtalar ro'yxati — `GET /inventory/transfers/destinations/` (`inventory.transfers.create`). Hujjat javobidagi `allowed: {edit, send, receive, cancel}` — tugmalar uchun (service baribir qayta tekshiradi).
+- **Inventarizatsiya:** ko'rish — `inventory.counts.manage` yoki `inventory.view_cost`; ochish, sanash, yakunlash, bekor qilish — `inventory.counts.manage` + nuqta.
+- **Hisobdan chiqarish:** ko'rish — `inventory.writeoffs.manage` yoki `inventory.view_cost`; yaratish/bekor qilish — `inventory.writeoffs.manage` + nuqta. Sabablar ma'lumotnomasi — `settings.manage`.
+- **Savdo qaytarish:** `sales.returns.create` + nuqta; sotuvchi faqat **o'z** savdosini qaytaradi, `sales.cancel` huquqi borlar nuqtadagi istalgan savdoni (403 `return_forbidden`). Pul qaytarish shu huquq bilan (alohida `payments.refund` shart emas). Qaytarish bo'lgan savdoni bekor qilib bo'lmaydi (409 `sale_has_returns`).
+- Tannarx maydonlari (ko'chirish, inventarizatsiya, hisobdan chiqarish, qaytarish) `inventory.view_cost` bo'lmasa javobdan olib tashlanadi; WebSocket payload ida tannarx yo'q.
+
+## Hisobotlar va dashboard bo'yicha qoidalar (8-bosqich)
+
+- **Hisobotlar ro'yxati va eksport:** `reports.view` yoki `reports.financial` (birortasi). Har hisobotning o'z `capability` si bor: savdo, tovarlar bo'yicha foyda, qaytarish, to'lovlar, kassa oqimi, qarzlar — `reports.financial`; kirim — `purchasing.view`; ombor hisobotlari — `reports.view`. Ro'yxatda faqat ochiq hisobotlar; boshqasini so'rash — 403 `permission_denied`.
+- **Ustun darajasi:** tannarx/qiymat ustunlari (`Column.capability = "inventory.view_cost"`) huquq bo'lmasa JSON, PDF va Excel dan olib tashlanadi.
+- **Nuqta chegarasi:** `branch` filtri `ensure_branch_access` dan o'tadi (begona nuqta — 403); filtr bo'sh bo'lsa selectorlar foydalanuvchining nuqtalari bilan cheklanadi (`branches.view_all` — hammasi).
+- **Fondagi fayllar:** `GET /reports/jobs/` va yuklab olish — faqat **o'zi so'ragan** `ReportJob` (boshqaniki 404); tayyor bo'lmasa 409 `report_not_ready`. `report.ready` WS xabari ham faqat so'raganga.
+- **Dashboard:** `GET /reports/dashboard/` — `dashboard.view`. Foyda KPI va grafikdagi foyda chizig'i — faqat `reports.financial`; ombor qiymati — `inventory.view_cost`. Ma'lumot foydalanuvchi nuqtalari bilan cheklangan; `branch` parametri bilan bitta nuqta.
+- Har bir eksport audit jurnaliga yoziladi (`report.exported`: hisobot, format, filtrlar, qatorlar soni).

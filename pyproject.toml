@@ -1,0 +1,505 @@
+[project]
+name = "sevento-backend"
+version = "0.1.0"
+description = "Sevento — savdo, ombor, nasiya va kassa hisobi (backend)"
+requires-python = ">=3.12"
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+extend-exclude = ["migrations", ".venv"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "DJ", "T20"]
+ignore = ["DJ001"]
+
+[tool.ruff.lint.per-file-ignores]
+"config/settings/*.py" = ["F403", "F405"]
+"**/tests/**" = ["S", "B011"]
+"conftest.py" = ["T20"]
+
+[tool.ruff.lint.isort]
+known-first-party = ["config", "core", "apps"]
+
+[tool.pytest.ini_options]
+DJANGO_SETTINGS_MODULE = "config.settings.test"
+python_files = ["test_*.py"]
+testpaths = ["core", "apps"]
+addopts = "-ra -q --strict-markers"
+asyncio_mode = "auto"
+filterwarnings = ["ignore::DeprecationWarning"]
+
+[tool.importlinter]
+root_packages = ["config", "core", "apps"]
+include_external_packages = false
+
+# core — umumiy yadro: biznes app lariga bog'lanmaydi
+[[tool.importlinter.contracts]]
+name = "core apps ga bog'lanmaydi"
+type = "forbidden"
+source_modules = ["core"]
+forbidden_modules = ["apps"]
+
+# App lar bir-birining models/serializers/views qatlamiga yopishmaydi:
+# faqat services, selectors, events orqali gaplashadi (testlar istisno).
+
+[[tool.importlinter.contracts]]
+name = "accounts boshqa app ichki qatlamini import qilmaydi"
+type = "forbidden"
+allow_indirect_imports = true
+ignore_imports = ["apps.**.tests.** -> apps.**"]
+source_modules = ["apps.accounts"]
+forbidden_modules = [
+    "apps.branches.models",
+    "apps.branches.serializers",
+    "apps.branches.views",
+    "apps.audit.models",
+    "apps.audit.serializers",
+    "apps.audit.views",
+    "apps.realtime.models",
+    "apps.realtime.serializers",
+    "apps.realtime.views",
+    "apps.currency.models",
+    "apps.currency.serializers",
+    "apps.currency.views",
+    "apps.catalog.models",
+    "apps.catalog.serializers",
+    "apps.catalog.views",
+    "apps.inventory.models",
+    "apps.inventory.serializers",
+    "apps.inventory.views",
+    "apps.purchasing.models",
+    "apps.purchasing.serializers",
+    "apps.purchasing.views",
+    "apps.payments.models",
+    "apps.payments.serializers",
+    "apps.payments.views",
+    "apps.sales.models",
+    "apps.sales.serializers",
+    "apps.sales.views",
+]
+
+[[tool.importlinter.contracts]]
+name = "branches boshqa app ichki qatlamini import qilmaydi"
+type = "forbidden"
+allow_indirect_imports = true
+ignore_imports = ["apps.**.tests.** -> apps.**"]
+source_modules = ["apps.branches"]
+forbidden_modules = [
+    "apps.accounts.models",
+    "apps.accounts.serializers",
+    "apps.accounts.views",
+    "apps.audit.models",
+    "apps.audit.serializers",
+    "apps.audit.views",
+    "apps.realtime.models",
+    "apps.realtime.serializers",
+    "apps.realtime.views",
+    "apps.currency.models",
+    "apps.currency.serializers",
+    "apps.currency.views",
+    "apps.catalog.models",
+    "apps.catalog.serializers",
+    "apps.catalog.views",
+    "apps.inventory.models",
+    "apps.inventory.serializers",
+    "apps.inventory.views",
+    "apps.purchasing.models",
+    "apps.purchasing.serializers",
+    "apps.purchasing.views",
+    "apps.payments.models",
+    "apps.payments.serializers",
+    "apps.payments.views",
+    "apps.sales.models",
+    "apps.sales.serializers",
+    "apps.sales.views",
+]
+
+[[tool.importlinter.contracts]]
+name = "audit boshqa app ichki qatlamini import qilmaydi"
+type = "forbidden"
+allow_indirect_imports = true
+ignore_imports = ["apps.**.tests.** -> apps.**"]
+source_modules = ["apps.audit"]
+forbidden_modules = [
+    "apps.accounts.models",
+    "apps.accounts.serializers",
+    "apps.accounts.views",
+    "apps.branches.models",
+    "apps.branches.serializers",
+    "apps.branches.views",
+    "apps.realtime.models",
+    "apps.realtime.serializers",
+    "apps.realtime.views",
+    "apps.currency.models",
+    "apps.currency.serializers",
+    "apps.currency.views",
+    "apps.catalog.models",
+    "apps.catalog.serializers",
+    "apps.catalog.views",
+    "apps.inventory.models",
+    "apps.inventory.serializers",
+    "apps.inventory.views",
+    "apps.purchasing.models",
+    "apps.purchasing.serializers",
+    "apps.purchasing.views",
+    "apps.payments.models",
+    "apps.payments.serializers",
+    "apps.payments.views",
+    "apps.sales.models",
+    "apps.sales.serializers",
+    "apps.sales.views",
+]
+
+[[tool.importlinter.contracts]]
+name = "realtime boshqa app ichki qatlamini import qilmaydi"
+type = "forbidden"
+allow_indirect_imports = true
+ignore_imports = ["apps.**.tests.** -> apps.**"]
+source_modules = ["apps.realtime"]
+forbidden_modules = [
+    "apps.accounts.models",
+    "apps.accounts.serializers",
+    "apps.accounts.views",
+    "apps.branches.models",
+    "apps.branches.serializers",
+    "apps.branches.views",
+    "apps.audit.models",
+    "apps.audit.serializers",
+    "apps.audit.views",
+    "apps.currency.models",
+    "apps.currency.serializers",
+    "apps.currency.views",
+    "apps.catalog.models",
+    "apps.catalog.serializers",
+    "apps.catalog.views",
+    "apps.inventory.models",
+    "apps.inventory.serializers",
+    "apps.inventory.views",
+    "apps.purchasing.models",
+    "apps.purchasing.serializers",
+    "apps.purchasing.views",
+    "apps.payments.models",
+    "apps.payments.serializers",
+    "apps.payments.views",
+    "apps.sales.models",
+    "apps.sales.serializers",
+    "apps.sales.views",
+]
+
+[[tool.importlinter.contracts]]
+name = "currency boshqa app ichki qatlamini import qilmaydi"
+type = "forbidden"
+allow_indirect_imports = true
+ignore_imports = ["apps.**.tests.** -> apps.**"]
+source_modules = ["apps.currency"]
+forbidden_modules = [
+    "apps.accounts.models",
+    "apps.accounts.serializers",
+    "apps.accounts.views",
+    "apps.branches.models",
+    "apps.branches.serializers",
+    "apps.branches.views",
+    "apps.audit.models",
+    "apps.audit.serializers",
+    "apps.audit.views",
+    "apps.realtime.models",
+    "apps.realtime.serializers",
+    "apps.realtime.views",
+    "apps.catalog.models",
+    "apps.catalog.serializers",
+    "apps.catalog.views",
+    "apps.inventory.models",
+    "apps.inventory.serializers",
+    "apps.inventory.views",
+    "apps.purchasing.models",
+    "apps.purchasing.serializers",
+    "apps.purchasing.views",
+    "apps.payments.models",
+    "apps.payments.serializers",
+    "apps.payments.views",
+    "apps.sales.models",
+    "apps.sales.serializers",
+    "apps.sales.views",
+]
+
+[[tool.importlinter.contracts]]
+name = "catalog boshqa app ichki qatlamini import qilmaydi"
+type = "forbidden"
+allow_indirect_imports = true
+ignore_imports = ["apps.**.tests.** -> apps.**"]
+source_modules = ["apps.catalog"]
+forbidden_modules = [
+    "apps.accounts.models",
+    "apps.accounts.serializers",
+    "apps.accounts.views",
+    "apps.branches.models",
+    "apps.branches.serializers",
+    "apps.branches.views",
+    "apps.audit.models",
+    "apps.audit.serializers",
+    "apps.audit.views",
+    "apps.realtime.models",
+    "apps.realtime.serializers",
+    "apps.realtime.views",
+    "apps.currency.models",
+    "apps.currency.serializers",
+    "apps.currency.views",
+    "apps.inventory.models",
+    "apps.inventory.serializers",
+    "apps.inventory.views",
+    "apps.purchasing.models",
+    "apps.purchasing.serializers",
+    "apps.purchasing.views",
+    "apps.payments.models",
+    "apps.payments.serializers",
+    "apps.payments.views",
+    "apps.sales.models",
+    "apps.sales.serializers",
+    "apps.sales.views",
+]
+
+[[tool.importlinter.contracts]]
+name = "inventory boshqa app ichki qatlamini import qilmaydi"
+type = "forbidden"
+allow_indirect_imports = true
+ignore_imports = ["apps.**.tests.** -> apps.**"]
+source_modules = ["apps.inventory"]
+forbidden_modules = [
+    "apps.accounts.models",
+    "apps.accounts.serializers",
+    "apps.accounts.views",
+    "apps.branches.models",
+    "apps.branches.serializers",
+    "apps.branches.views",
+    "apps.audit.models",
+    "apps.audit.serializers",
+    "apps.audit.views",
+    "apps.realtime.models",
+    "apps.realtime.serializers",
+    "apps.realtime.views",
+    "apps.currency.models",
+    "apps.currency.serializers",
+    "apps.currency.views",
+    "apps.catalog.models",
+    "apps.catalog.serializers",
+    "apps.catalog.views",
+    "apps.purchasing.models",
+    "apps.purchasing.serializers",
+    "apps.purchasing.views",
+    "apps.payments.models",
+    "apps.payments.serializers",
+    "apps.payments.views",
+    "apps.sales.models",
+    "apps.sales.serializers",
+    "apps.sales.views",
+]
+
+[[tool.importlinter.contracts]]
+name = "purchasing boshqa app ichki qatlamini import qilmaydi"
+type = "forbidden"
+allow_indirect_imports = true
+ignore_imports = ["apps.**.tests.** -> apps.**"]
+source_modules = ["apps.purchasing"]
+forbidden_modules = [
+    "apps.accounts.models",
+    "apps.accounts.serializers",
+    "apps.accounts.views",
+    "apps.branches.models",
+    "apps.branches.serializers",
+    "apps.branches.views",
+    "apps.audit.models",
+    "apps.audit.serializers",
+    "apps.audit.views",
+    "apps.realtime.models",
+    "apps.realtime.serializers",
+    "apps.realtime.views",
+    "apps.currency.models",
+    "apps.currency.serializers",
+    "apps.currency.views",
+    "apps.catalog.models",
+    "apps.catalog.serializers",
+    "apps.catalog.views",
+    "apps.inventory.models",
+    "apps.inventory.serializers",
+    "apps.inventory.views",
+    "apps.payments.models",
+    "apps.payments.serializers",
+    "apps.payments.views",
+    "apps.sales.models",
+    "apps.sales.serializers",
+    "apps.sales.views",
+]
+
+[[tool.importlinter.contracts]]
+name = "payments boshqa app ichki qatlamini import qilmaydi"
+type = "forbidden"
+allow_indirect_imports = true
+ignore_imports = ["apps.**.tests.** -> apps.**"]
+source_modules = ["apps.payments"]
+forbidden_modules = [
+    "apps.accounts.models",
+    "apps.accounts.serializers",
+    "apps.accounts.views",
+    "apps.branches.models",
+    "apps.branches.serializers",
+    "apps.branches.views",
+    "apps.audit.models",
+    "apps.audit.serializers",
+    "apps.audit.views",
+    "apps.realtime.models",
+    "apps.realtime.serializers",
+    "apps.realtime.views",
+    "apps.currency.models",
+    "apps.currency.serializers",
+    "apps.currency.views",
+    "apps.catalog.models",
+    "apps.catalog.serializers",
+    "apps.catalog.views",
+    "apps.inventory.models",
+    "apps.inventory.serializers",
+    "apps.inventory.views",
+    "apps.purchasing.models",
+    "apps.purchasing.serializers",
+    "apps.purchasing.views",
+    "apps.sales.models",
+    "apps.sales.serializers",
+    "apps.sales.views",
+]
+
+[[tool.importlinter.contracts]]
+name = "sales boshqa app ichki qatlamini import qilmaydi"
+type = "forbidden"
+allow_indirect_imports = true
+ignore_imports = ["apps.**.tests.** -> apps.**"]
+source_modules = ["apps.sales"]
+forbidden_modules = [
+    "apps.accounts.models",
+    "apps.accounts.serializers",
+    "apps.accounts.views",
+    "apps.branches.models",
+    "apps.branches.serializers",
+    "apps.branches.views",
+    "apps.audit.models",
+    "apps.audit.serializers",
+    "apps.audit.views",
+    "apps.realtime.models",
+    "apps.realtime.serializers",
+    "apps.realtime.views",
+    "apps.currency.models",
+    "apps.currency.serializers",
+    "apps.currency.views",
+    "apps.catalog.models",
+    "apps.catalog.serializers",
+    "apps.catalog.views",
+    "apps.inventory.models",
+    "apps.inventory.serializers",
+    "apps.inventory.views",
+    "apps.purchasing.models",
+    "apps.purchasing.serializers",
+    "apps.purchasing.views",
+    "apps.payments.models",
+    "apps.payments.serializers",
+    "apps.payments.views",
+]
+
+# Bog'liqlik yo'nalishi: hujjatlar (kirim, savdo) ombor va to'lovni chaqiradi, aksincha emas.
+
+[[tool.importlinter.contracts]]
+name = "inventory hujjat app lariga bog'lanmaydi"
+type = "forbidden"
+source_modules = ["apps.inventory"]
+forbidden_modules = ["apps.purchasing", "apps.sales", "apps.payments"]
+
+[[tool.importlinter.contracts]]
+name = "payments savdo va kirimga bog'lanmaydi"
+type = "forbidden"
+source_modules = ["apps.payments"]
+forbidden_modules = ["apps.sales", "apps.purchasing"]
+
+# reports faqat o'qiydi: boshqa app larning faqat selectors (va types) qatlamini ishlatadi
+[[tool.importlinter.contracts]]
+name = "reports faqat selector lar orqali o'qiydi"
+type = "forbidden"
+allow_indirect_imports = true
+ignore_imports = ["apps.**.tests.** -> apps.**"]
+source_modules = ["apps.reports"]
+forbidden_modules = [
+    "apps.accounts.models",
+    "apps.accounts.serializers",
+    "apps.accounts.views",
+    "apps.accounts.services",
+    "apps.branches.models",
+    "apps.branches.views",
+    "apps.branches.services",
+    "apps.audit.models",
+    "apps.catalog.models",
+    "apps.catalog.services",
+    "apps.catalog.views",
+    "apps.currency.models",
+    "apps.currency.services",
+    "apps.currency.views",
+    "apps.inventory.models",
+    "apps.inventory.services",
+    "apps.inventory.views",
+    "apps.purchasing.models",
+    "apps.purchasing.services",
+    "apps.purchasing.views",
+    "apps.payments.models",
+    "apps.payments.services",
+    "apps.payments.views",
+    "apps.sales.models",
+    "apps.sales.services",
+    "apps.sales.views",
+]
+
+# hech bir biznes app hisobotlarga bog'lanmaydi (bog'liqlik yo'nalishi: reports → boshqalar)
+[[tool.importlinter.contracts]]
+name = "biznes app lar reports ga bog'lanmaydi"
+type = "forbidden"
+source_modules = [
+    "apps.accounts",
+    "apps.branches",
+    "apps.catalog",
+    "apps.currency",
+    "apps.inventory",
+    "apps.purchasing",
+    "apps.payments",
+    "apps.sales",
+]
+forbidden_modules = ["apps.reports"]
+
+[[tool.importlinter.contracts]]
+name = "demo faqat servis va selectorlar orqali yozadi"
+type = "forbidden"
+allow_indirect_imports = true
+ignore_imports = ["apps.demo.tests.** -> apps.**"]
+source_modules = ["apps.demo"]
+forbidden_modules = [
+    "apps.accounts.models",
+    "apps.branches.models",
+    "apps.catalog.models",
+    "apps.currency.models",
+    "apps.inventory.models",
+    "apps.payments.models",
+    "apps.purchasing.models",
+    "apps.sales.models",
+    "apps.reports.models",
+]
+
+[tool.coverage.run]
+source = ["apps", "core", "config"]
+omit = [
+    "*/migrations/*",
+    "*/tests/*",
+    "config/settings/dev.py",
+    "config/settings/prod.py",
+    "config/wsgi.py",
+]
+
+[tool.coverage.report]
+# CI shu chegaradan pastga tushsa qizil (hozir ~97%)
+fail_under = 95
+show_missing = true
+skip_covered = true
+exclude_also = ["if TYPE_CHECKING:", "raise NotImplementedError"]
